@@ -1,16 +1,16 @@
 ## Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
 ## SPDX-License-Identifier: Apache-2.0
-
 version: 0.2
 
 env:
   variables:
     REGION: us-east-1
     DOMAIN: crypto-tools-internal
-    REPOSITORY: java-esdk-staging
-    BRANCH: "mainline-1.x"
+    REPOSITORY: java-esdk-ci
+    NAMESPACE: com.amazonaws
+    PACKAGE: aws-encryption-sdk-java
   parameter-store:
-    ACCOUNT: /CodeBuild/AccountId
+    ACCOUNT: /CodeBuild/AccountIdentity
   secrets-manager:
     GPG_KEY: Maven-GPG-Keys-Credentials:Keyname
     GPG_PASS: Maven-GPG-Keys-Credentials:Passphrase
@@ -18,10 +18,9 @@ env:
 phases:
   install:
     runtime-versions:
-      java: corretto11
+      java: openjdk11
   pre_build:
     commands:
-      - git checkout $BRANCH
       - export SETTINGS_FILE=$(pwd)/codebuild/release/settings.xml
       - export CODEARTIFACT_TOKEN=$(aws codeartifact get-authorization-token --domain $DOMAIN --domain-owner $ACCOUNT --query authorizationToken --output text --region ${REGION})
       - export CODEARTIFACT_REPO_URL=https://${DOMAIN}-${ACCOUNT}.d.codeartifact.${REGION}.amazonaws.com/maven/${REPOSITORY}
@@ -37,7 +36,7 @@ phases:
       - |
         mvn deploy \
           -PpublishingCodeArtifact \
-          -Pfast-tests-only \
+          -Dmaven.test.skip=true \
           -DperformRelease \
           -Dgpg.homedir="$HOME/mvn_gpg" \
           -DautoReleaseAfterClose=true \
@@ -46,4 +45,20 @@ phases:
           -Dcodeartifact.token=$CODEARTIFACT_TOKEN \
           -DaltDeploymentRepository=codeartifact::default::$CODEARTIFACT_REPO_URL \
           --no-transfer-progress \
+          -T 8 \
           -s $SETTINGS_FILE
+    finally:
+      - |
+        if expr ${CODEBUILD_BUILD_SUCCEEDING} != 1; then
+          echo "An error occured while building and uploading $REPOSITORY."
+          echo "Did a previous build already upload $VERSION_HASH to $REPOSITORY?"
+          echo "Try deleting $VERSION_HASH from $REPOSITORY and restart"
+          echo "Delete Package Version Command \n
+            aws codeartifact delete-package-versions --domain $DOMAIN \
+              --repository $REPOSITORY \
+              --format maven \
+              --namespace $NAMESPACE \
+              --package $PACKAGE \
+              --versions $VERSION_HASH \
+              --region $REGION";
+        fi

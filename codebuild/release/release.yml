@@ -70,10 +70,18 @@ batch:
       - version
     buildspec: codebuild/release/release-prod.yml
 
+# Wait for artifacts to be available
+  - identifier: availability
+    depend-on:
+      - version
+    buildspec: codebuild/release/artifact-hunt.yml
+    env:
+      image: aws/codebuild/standard:5.0
+
 # Validate Maven Central with supported JDK and Corretto
   - identifier: validate_prod_release_openjdk8
     depend-on:
-      - publish
+      - availability
     buildspec: codebuild/release/validate-prod.yml
     env:
       variables:
@@ -83,7 +91,7 @@ batch:
 
   - identifier: validate_prod_release_openjdk11
     depend-on:
-      - publish
+      - availability
     buildspec: codebuild/release/validate-prod.yml
     env:
       variables:
@@ -93,7 +101,7 @@ batch:
 
   - identifier: validate_prod_release_corretto8
     depend-on:
-      - publish
+      - availability
     buildspec: codebuild/release/validate-prod.yml
     env:
       variables:
@@ -103,7 +111,7 @@ batch:
 
   - identifier: validate_prod_release_corretto11
     depend-on:
-      - publish
+      - availability
     buildspec: codebuild/release/validate-prod.yml
     env:
       variables:

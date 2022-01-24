@@ -32,7 +32,7 @@ public class VersionInfo {
    * @return the name of the library with a tag indicating intended for AWS SDK v2
    */
   public static String apiName() {
-    return USER_AGENT_PREFIX + "awssdkV2";
+    return USER_AGENT_PREFIX.substring(0, USER_AGENT_PREFIX.length() - 1);
   }
 
   /*

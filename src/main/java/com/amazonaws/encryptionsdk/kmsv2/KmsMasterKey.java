@@ -13,15 +13,20 @@
 
 package com.amazonaws.encryptionsdk.kmsv2;
 
-import com.amazonaws.AmazonServiceException;
-import com.amazonaws.AmazonWebServiceRequest;
 import com.amazonaws.encryptionsdk.*;
 import com.amazonaws.encryptionsdk.exception.AwsCryptoException;
 import com.amazonaws.encryptionsdk.exception.UnsupportedProviderException;
 import com.amazonaws.encryptionsdk.internal.VersionInfo;
 import com.amazonaws.encryptionsdk.kms.KmsMethods;
-import com.amazonaws.services.kms.AWSKMS;
-import com.amazonaws.services.kms.model.*;
+
+import software.amazon.awssdk.awscore.AwsRequestOverrideConfiguration;
+import software.amazon.awssdk.awscore.exception.AwsServiceException;
+import software.amazon.awssdk.core.ApiName;
+import software.amazon.awssdk.core.SdkBytes;
+import software.amazon.awssdk.services.kms.KmsClient;
+import software.amazon.awssdk.services.kms.model.DecryptResponse;
+import software.amazon.awssdk.services.kms.model.EncryptResponse;
+import software.amazon.awssdk.services.kms.model.GenerateDataKeyResponse;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
@@ -31,6 +36,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
@@ -41,26 +47,29 @@ import java.util.function.Supplier;
  * regionally isolated.
  */
 public final class KmsMasterKey extends MasterKey<KmsMasterKey> implements KmsMethods {
-  private static final String USER_AGENT = VersionInfo.loadUserAgent();
-  private final Supplier<AWSKMS> kms_;
+  private static final ApiName API_NAME = ApiName.builder()
+          .name(VersionInfo.apiName())
+          .version(VersionInfo.versionNumber())
+          .build();
+  private static final Consumer<AwsRequestOverrideConfiguration.Builder> API_NAME_INTERCEPTOR = builder -> builder.addApiName(API_NAME);
+
+  private final Supplier<KmsClient> clientSupplier_;
   private final MasterKeyProvider<KmsMasterKey> sourceProvider_;
   private final String id_;
   private final List<String> grantTokens_ = new ArrayList<>();
 
-  private <T extends AmazonWebServiceRequest> T updateUserAgent(T request) {
-    request.getRequestClientOptions().appendUserAgent(USER_AGENT);
-
-    return request;
-  }
-
   static KmsMasterKey getInstance(
-      final Supplier<AWSKMS> kms, final String id, final MasterKeyProvider<KmsMasterKey> provider) {
-    return new KmsMasterKey(kms, id, provider);
+      final Supplier<KmsClient> clientSupplier,
+      final String id,
+      final MasterKeyProvider<KmsMasterKey> provider) {
+    return new KmsMasterKey(clientSupplier, id, provider);
   }
 
   private KmsMasterKey(
-      final Supplier<AWSKMS> kms, final String id, final MasterKeyProvider<KmsMasterKey> provider) {
-    kms_ = kms;
+      final Supplier<KmsClient> clientSupplier,
+      final String id,
+      final MasterKeyProvider<KmsMasterKey> provider) {
+    clientSupplier_ = clientSupplier;
     id_ = id;
     sourceProvider_ = provider;
   }
@@ -78,26 +87,36 @@ public final class KmsMasterKey extends MasterKey<KmsMasterKey> implements KmsMe
   @Override
   public DataKey<KmsMasterKey> generateDataKey(
       final CryptoAlgorithm algorithm, final Map<String, String> encryptionContext) {
-    final GenerateDataKeyResult gdkResult =
-        kms_.get()
-            .generateDataKey(
-                updateUserAgent(
-                    new GenerateDataKeyRequest()
-                        .withKeyId(getKeyId())
-                        .withNumberOfBytes(algorithm.getDataKeyLength())
-                        .withEncryptionContext(encryptionContext)
-                        .withGrantTokens(grantTokens_)));
-    final byte[] rawKey = new byte[algorithm.getDataKeyLength()];
-    gdkResult.getPlaintext().get(rawKey);
-    if (gdkResult.getPlaintext().remaining() > 0) {
-      throw new IllegalStateException("Recieved an unexpected number of bytes from KMS");
+    final GenerateDataKeyResponse gdkResponse = clientSupplier_.get().generateDataKey(
+            software.amazon.awssdk.services.kms.model.GenerateDataKeyRequest.builder()
+                    .overrideConfiguration(API_NAME_INTERCEPTOR)
+                    .keyId(getKeyId())
+                    .numberOfBytes(algorithm.getDataKeyLength())
+                    .encryptionContext(encryptionContext)
+                    .grantTokens(grantTokens_)
+                    .build());
+
+
+    final ByteBuffer plaintextBuffer = gdkResponse.plaintext().asByteBuffer();
+    if (plaintextBuffer.limit() != algorithm.getDataKeyLength()) {
+      throw new IllegalStateException("Received an unexpected number of bytes from KMS");
     }
-    final byte[] encryptedKey = new byte[gdkResult.getCiphertextBlob().remaining()];
-    gdkResult.getCiphertextBlob().get(encryptedKey);
+
+    final byte[] rawKey = new byte[algorithm.getDataKeyLength()];
+    plaintextBuffer.get(rawKey);
+
+    final ByteBuffer ciphertextBlobBuffer = gdkResponse.ciphertextBlob().asByteBuffer();
+    final byte[] encryptedKey = new byte[ciphertextBlobBuffer.remaining()];
+    ciphertextBlobBuffer.get(encryptedKey);
+
+    final String gdkResponseKeyId = gdkResponse.keyId();
 
     final SecretKeySpec key = new SecretKeySpec(rawKey, algorithm.getDataKeyAlgo());
     return new DataKey<>(
-        key, encryptedKey, gdkResult.getKeyId().getBytes(StandardCharsets.UTF_8), this);
+        key,
+        encryptedKey,
+        gdkResponseKeyId.getBytes(StandardCharsets.UTF_8),
+        this);
   }
 
   @Override
@@ -126,20 +145,27 @@ public final class KmsMasterKey extends MasterKey<KmsMasterKey> implements KmsMe
       throw new IllegalArgumentException("Only RAW encoded keys are supported");
     }
     try {
-      final EncryptResult encryptResult =
-          kms_.get()
-              .encrypt(
-                  updateUserAgent(
-                      new EncryptRequest()
-                          .withKeyId(id_)
-                          .withPlaintext(ByteBuffer.wrap(key.getEncoded()))
-                          .withEncryptionContext(encryptionContext)
-                          .withGrantTokens(grantTokens_)));
-      final byte[] edk = new byte[encryptResult.getCiphertextBlob().remaining()];
-      encryptResult.getCiphertextBlob().get(edk);
+      final EncryptResponse encryptResponse = clientSupplier_.get().encrypt(
+              software.amazon.awssdk.services.kms.model.EncryptRequest.builder()
+                      .overrideConfiguration(API_NAME_INTERCEPTOR)
+                      .keyId(id_)
+                      .plaintext(SdkBytes.fromByteArray(key.getEncoded()))
+                      .encryptionContext(encryptionContext)
+                      .grantTokens(grantTokens_)
+                      .build());
+
+      final ByteBuffer ciphertextBlobBuffer = encryptResponse.ciphertextBlob().asByteBuffer();
+      final byte[] edk = new byte[ciphertextBlobBuffer.remaining()];
+      ciphertextBlobBuffer.get(edk);
+
+      final String encryptResultKeyId = encryptResponse.keyId();
+
       return new DataKey<>(
-          dataKey.getKey(), edk, encryptResult.getKeyId().getBytes(StandardCharsets.UTF_8), this);
-    } catch (final AmazonServiceException asex) {
+          dataKey.getKey(),
+          edk,
+          encryptResultKeyId.getBytes(StandardCharsets.UTF_8),
+          this);
+    } catch (final AwsServiceException asex) {
       throw new AwsCryptoException(asex);
     }
   }
@@ -157,31 +183,36 @@ public final class KmsMasterKey extends MasterKey<KmsMasterKey> implements KmsMe
         if (!edkKeyId.equals(id_)) {
           continue;
         }
-        final DecryptResult decryptResult =
-            kms_.get()
-                .decrypt(
-                    updateUserAgent(
-                        new DecryptRequest()
-                            .withCiphertextBlob(ByteBuffer.wrap(edk.getEncryptedDataKey()))
-                            .withEncryptionContext(encryptionContext)
-                            .withGrantTokens(grantTokens_)
-                            .withKeyId(edkKeyId)));
-        if (decryptResult.getKeyId() == null) {
+        final DecryptResponse decryptResponse = clientSupplier_.get().decrypt(
+                        software.amazon.awssdk.services.kms.model.DecryptRequest.builder()
+                                .overrideConfiguration(API_NAME_INTERCEPTOR)
+                                .ciphertextBlob(SdkBytes.fromByteArray(edk.getEncryptedDataKey()))
+                                .encryptionContext(encryptionContext)
+                                .grantTokens(grantTokens_)
+                                .keyId(edkKeyId)
+                                .build()
+                );
+
+        final String decryptResponseKeyId = decryptResponse.keyId();
+        if (decryptResponseKeyId == null) {
           throw new IllegalStateException("Received an empty keyId from KMS");
         }
-        if (decryptResult.getKeyId().equals(id_)) {
-          final byte[] rawKey = new byte[algorithm.getDataKeyLength()];
-          decryptResult.getPlaintext().get(rawKey);
-          if (decryptResult.getPlaintext().remaining() > 0) {
+        if (decryptResponseKeyId.equals(id_)) {
+          final ByteBuffer plaintextBuffer = decryptResponse.plaintext().asByteBuffer();
+          if (plaintextBuffer.limit() != algorithm.getDataKeyLength()) {
             throw new IllegalStateException("Received an unexpected number of bytes from KMS");
           }
+
+          final byte[] rawKey = new byte[algorithm.getDataKeyLength()];
+          plaintextBuffer.get(rawKey);
+
           return new DataKey<>(
               new SecretKeySpec(rawKey, algorithm.getDataKeyAlgo()),
               edk.getEncryptedDataKey(),
               edk.getProviderInformation(),
               this);
         }
-      } catch (final AmazonServiceException awsex) {
+      } catch (final AwsServiceException awsex) {
         exceptions.add(awsex);
       }
     }

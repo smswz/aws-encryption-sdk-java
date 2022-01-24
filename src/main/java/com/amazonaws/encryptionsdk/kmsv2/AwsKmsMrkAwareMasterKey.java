@@ -363,16 +363,16 @@ public final class AwsKmsMrkAwareMasterKey extends MasterKey<AwsKmsMrkAwareMaste
                     .keyId(awsKmsIdentifier)
                     .build());
 
-    final String decryptResultKeyId = decryptResponse.keyId();
+    final String decryptResponseKeyId = decryptResponse.keyId();
     /* Exceptional Postcondition: Must have a CMK ARN from AWS KMS to match. */
-    if (decryptResultKeyId == null) {
+    if (decryptResponseKeyId == null) {
       throw new IllegalStateException("Received an empty keyId from KMS");
     }
     // = compliance/framework/aws-kms/aws-kms-mrk-aware-master-key.txt#2.9
     // # If the call succeeds then the response's "KeyId" MUST be equal to the
     // # configured AWS KMS key identifier otherwise the function MUST collect
     // # an error.
-    if (!awsKmsIdentifier.equals(decryptResultKeyId)) {
+    if (!awsKmsIdentifier.equals(decryptResponseKeyId)) {
       throw new IllegalStateException(
           "Received an invalid response from KMS Decrypt call: Unexpected keyId.");
     }

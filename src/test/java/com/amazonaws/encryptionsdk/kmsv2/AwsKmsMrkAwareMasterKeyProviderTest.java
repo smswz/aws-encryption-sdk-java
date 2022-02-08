@@ -3,8 +3,11 @@
 
 package com.amazonaws.encryptionsdk.kmsv2;
 
-//import com.amazonaws.AmazonServiceException;
-//import com.amazonaws.auth.BasicAWSCredentials;
+import static com.amazonaws.encryptionsdk.internal.AwsKmsCmkArnInfo.parseInfoFromKeyArn;
+import static org.junit.Assert.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
 import com.amazonaws.encryptionsdk.*;
 import com.amazonaws.encryptionsdk.exception.AwsCryptoException;
 import com.amazonaws.encryptionsdk.exception.CannotUnwrapDataKeyException;
@@ -12,7 +15,9 @@ import com.amazonaws.encryptionsdk.exception.NoSuchMasterKeyException;
 import com.amazonaws.encryptionsdk.exception.UnsupportedProviderException;
 import com.amazonaws.encryptionsdk.kms.DiscoveryFilter;
 import com.amazonaws.encryptionsdk.model.KeyBlob;
-
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import org.junit.Test;
 import org.junit.experimental.runners.Enclosed;
 import org.junit.jupiter.api.DisplayName;
@@ -26,16 +31,6 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.kms.KmsClient;
 import software.amazon.awssdk.services.kms.model.DecryptRequest;
 import software.amazon.awssdk.services.kms.model.DecryptResponse;
-
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-
-import static com.amazonaws.encryptionsdk.internal.AwsKmsCmkArnInfo.parseInfoFromKeyArn;
-import static org.junit.Assert.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
 
 @RunWith(Enclosed.class)
 public class AwsKmsMrkAwareMasterKeyProviderTest {
@@ -269,7 +264,8 @@ public class AwsKmsMrkAwareMasterKeyProviderTest {
 
     @Test
     public void basic_credentials_and_builder() {
-      AwsCredentialsProvider credsProvider = StaticCredentialsProvider.create(AwsBasicCredentials.create("asdf", "qwer"));
+      AwsCredentialsProvider credsProvider =
+          StaticCredentialsProvider.create(AwsBasicCredentials.create("asdf", "qwer"));
       AwsKmsMrkAwareMasterKeyProvider.builder()
           .builderSupplier(() -> KmsClient.builder().credentialsProvider(credsProvider))
           .buildDiscovery();
@@ -665,6 +661,8 @@ public class AwsKmsMrkAwareMasterKeyProviderTest {
       verify(client, times((1)))
           .decrypt(
               DecryptRequest.builder()
+                  .overrideConfiguration(
+                      builder -> builder.addApiName(AwsKmsMrkAwareMasterKey.API_NAME))
                   .grantTokens(GRANT_TOKENS)
                   .encryptionContext(ENCRYPTION_CONTEXT)
                   .keyId(identifier)
@@ -758,7 +756,8 @@ public class AwsKmsMrkAwareMasterKeyProviderTest {
       final RegionalClientSupplier supplier = mock(RegionalClientSupplier.class);
       final KmsClient client = mock(KmsClient.class);
       final String clientErrMsg = "asdf";
-      when(client.decrypt((DecryptRequest) any())).thenThrow(AwsServiceException.builder().message(clientErrMsg).build());
+      when(client.decrypt((DecryptRequest) any()))
+          .thenThrow(AwsServiceException.builder().message(clientErrMsg).build());
       when(supplier.getClient(any())).thenReturn(client);
 
       AwsKmsMrkAwareMasterKeyProvider mkp =
@@ -820,6 +819,7 @@ public class AwsKmsMrkAwareMasterKeyProviderTest {
 
       final AwsKmsMrkAwareMasterKeyProvider mkp =
           AwsKmsMrkAwareMasterKeyProvider.builder()
+              .defaultRegion(Region.US_WEST_2)
               .customRegionalClientSupplier(supplier)
               .buildStrict(identifier);
 

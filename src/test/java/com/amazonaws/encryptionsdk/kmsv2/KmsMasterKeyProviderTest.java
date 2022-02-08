@@ -3,17 +3,21 @@
 
 package com.amazonaws.encryptionsdk.kmsv2;
 
-
+import static com.amazonaws.encryptionsdk.TestUtils.assertThrows;
+import static com.amazonaws.encryptionsdk.internal.RandomBytesGenerator.generate;
+import static org.junit.Assert.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 import com.amazonaws.encryptionsdk.CryptoAlgorithm;
 import com.amazonaws.encryptionsdk.DataKey;
 import com.amazonaws.encryptionsdk.EncryptedDataKey;
 import com.amazonaws.encryptionsdk.exception.CannotUnwrapDataKeyException;
 import com.amazonaws.encryptionsdk.internal.VersionInfo;
-
-
 import com.amazonaws.encryptionsdk.kms.DiscoveryFilter;
 import com.amazonaws.encryptionsdk.model.KeyBlob;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
 import org.junit.Test;
 import org.junit.experimental.runners.Enclosed;
 import org.junit.runner.RunWith;
@@ -25,16 +29,6 @@ import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.kms.model.DecryptRequest;
 import software.amazon.awssdk.services.kms.model.DecryptResponse;
-
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
-
-import static com.amazonaws.encryptionsdk.TestUtils.assertThrows;
-import static com.amazonaws.encryptionsdk.internal.RandomBytesGenerator.generate;
-import static org.junit.Assert.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
 
 @RunWith(Enclosed.class)
 public class KmsMasterKeyProviderTest {
@@ -279,7 +273,8 @@ public class KmsMasterKeyProviderTest {
     @SuppressWarnings("deprecation")
     private KmsMasterKeyProvider constructMKPForTest(
         MKPTestConfiguration mkpConfig, RegionalClientSupplier supplier) {
-      KmsMasterKeyProvider.Builder builder = KmsMasterKeyProvider.builder().customRegionalClientSupplier(supplier);
+      KmsMasterKeyProvider.Builder builder =
+          KmsMasterKeyProvider.builder().customRegionalClientSupplier(supplier);
 
       KmsMasterKeyProvider mkp;
       if (mkpConfig.isDiscovery && mkpConfig.discoveryFilter == null) {
@@ -319,10 +314,11 @@ public class KmsMasterKeyProviderTest {
 
       // mock KMS to return the KeyId for the expected EDK,
       // we verify that we call KMS with this KeyId, so this is ok
-      DecryptResponse decryptResponse = DecryptResponse.builder()
-          .keyId(new String(expectedEDK.getProviderInformation(), StandardCharsets.UTF_8))
-          .plaintext(SdkBytes.fromByteArray(new byte[ALGORITHM_SUITE.getDataKeyLength()]))
-          .build();
+      DecryptResponse decryptResponse =
+          DecryptResponse.builder()
+              .keyId(new String(expectedEDK.getProviderInformation(), StandardCharsets.UTF_8))
+              .plaintext(SdkBytes.fromByteArray(new byte[ALGORITHM_SUITE.getDataKeyLength()]))
+              .build();
       doReturn(decryptResponse).when(client).decrypt(isA(DecryptRequest.class));
 
       DataKey<KmsMasterKey> dataKeyResult =
@@ -339,7 +335,7 @@ public class KmsMasterKeyProviderTest {
       assertEquals(ENCRYPTION_CONTEXT, actualRequest.encryptionContext());
       assertArrayEquals(
           expectedEDK.getEncryptedDataKey(), actualRequest.ciphertextBlob().asByteArray());
-      assertUserAgent(actualRequest);
+      assertApiName(actualRequest);
 
       assertArrayEquals(
           expectedEDK.getProviderInformation(), dataKeyResult.getProviderInformation());
@@ -359,7 +355,9 @@ public class KmsMasterKeyProviderTest {
       // failure and KMS was called the expected number of times
       if (decryptableEDKs.size() <= 1) {
         // Mock KMS to fail
-        doThrow(AwsServiceException.builder().message("fail").build()).when(client).decrypt(isA(DecryptRequest.class));
+        doThrow(AwsServiceException.builder().message("fail").build())
+            .when(client)
+            .decrypt(isA(DecryptRequest.class));
 
         assertThrows(
             CannotUnwrapDataKeyException.class,
@@ -374,10 +372,13 @@ public class KmsMasterKeyProviderTest {
       EncryptedDataKey expectedSuccessfulEDK = decryptableEDKs.get(1);
 
       // Mock KMS to fail the first call then succeed for the second call
-      DecryptResponse decryptResponse = DecryptResponse.builder()
-          .keyId(new String(expectedSuccessfulEDK.getProviderInformation(), StandardCharsets.UTF_8))
-          .plaintext(SdkBytes.fromByteArray(new byte[ALGORITHM_SUITE.getDataKeyLength()]))
-          .build();
+      DecryptResponse decryptResponse =
+          DecryptResponse.builder()
+              .keyId(
+                  new String(
+                      expectedSuccessfulEDK.getProviderInformation(), StandardCharsets.UTF_8))
+              .plaintext(SdkBytes.fromByteArray(new byte[ALGORITHM_SUITE.getDataKeyLength()]))
+              .build();
       doThrow(AwsServiceException.builder().message("fail").build())
           .doReturn(decryptResponse)
           .when(client)
@@ -398,7 +399,7 @@ public class KmsMasterKeyProviderTest {
       assertEquals(ENCRYPTION_CONTEXT, failedRequest.encryptionContext());
       assertArrayEquals(
           expectedFailedEDK.getEncryptedDataKey(), failedRequest.ciphertextBlob().asByteArray());
-      assertUserAgent(failedRequest);
+      assertApiName(failedRequest);
 
       DecryptRequest successfulRequest = actualRequests.get(1);
       assertArrayEquals(
@@ -408,7 +409,7 @@ public class KmsMasterKeyProviderTest {
       assertArrayEquals(
           expectedSuccessfulEDK.getEncryptedDataKey(),
           successfulRequest.ciphertextBlob().asByteArray());
-      assertUserAgent(successfulRequest);
+      assertApiName(successfulRequest);
 
       assertArrayEquals(
           expectedSuccessfulEDK.getProviderInformation(), dataKeyResult.getProviderInformation());
@@ -416,13 +417,15 @@ public class KmsMasterKeyProviderTest {
           expectedSuccessfulEDK.getEncryptedDataKey(), dataKeyResult.getEncryptedDataKey());
     }
 
-    private void assertUserAgent(AwsRequest request) {
+    private void assertApiName(AwsRequest request) {
       Optional<AwsRequestOverrideConfiguration> overrideConfig = request.overrideConfiguration();
       assertTrue(overrideConfig.isPresent());
-      assertTrue(overrideConfig.get()
-          .headers()
-          .get("User-Agent")
-          .contains(VersionInfo.apiName()));
+      assertTrue(
+          overrideConfig.get().apiNames().stream()
+              .anyMatch(
+                  api ->
+                      api.name().equals(VersionInfo.apiName())
+                          && api.version().equals(VersionInfo.versionNumber())));
     }
   }
 
@@ -433,7 +436,8 @@ public class KmsMasterKeyProviderTest {
 
       assertThrows(
           IllegalArgumentException.class,
-          () -> KmsMasterKeyProvider.builder().customRegionalClientSupplier(supplier).buildStrict());
+          () ->
+              KmsMasterKeyProvider.builder().customRegionalClientSupplier(supplier).buildStrict());
 
       assertThrows(
           IllegalArgumentException.class,
@@ -498,10 +502,11 @@ public class KmsMasterKeyProviderTest {
       RegionalClientSupplier supplier = mock(RegionalClientSupplier.class);
       when(supplier.getClient(any())).thenReturn(client);
 
-      DecryptResponse badResponse = DecryptResponse.builder()
-          .keyId(KEY_ID_2)
-          .plaintext(SdkBytes.fromByteArray(new byte[ALGORITHM_SUITE.getDataKeyLength()]))
-          .build();
+      DecryptResponse badResponse =
+          DecryptResponse.builder()
+              .keyId(KEY_ID_2)
+              .plaintext(SdkBytes.fromByteArray(new byte[ALGORITHM_SUITE.getDataKeyLength()]))
+              .build();
 
       doReturn(badResponse).when(client).decrypt(isA(DecryptRequest.class));
 

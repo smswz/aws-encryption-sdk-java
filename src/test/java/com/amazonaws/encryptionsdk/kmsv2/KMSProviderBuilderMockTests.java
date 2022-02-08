@@ -3,12 +3,19 @@
 
 package com.amazonaws.encryptionsdk.kmsv2;
 
+import static com.amazonaws.encryptionsdk.multi.MultipleProviderFactory.buildMultiProvider;
+import static java.util.Collections.singletonList;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.notNull;
+import static org.mockito.Mockito.*;
+
 import com.amazonaws.encryptionsdk.AwsCrypto;
 import com.amazonaws.encryptionsdk.MasterKeyProvider;
 import com.amazonaws.encryptionsdk.internal.VersionInfo;
-import com.amazonaws.encryptionsdk.kmsv2.KmsMasterKey;
-import com.amazonaws.encryptionsdk.kmsv2.KmsMasterKeyProvider;
-import com.amazonaws.encryptionsdk.kmsv2.RegionalClientSupplier;
+import java.util.Arrays;
+import java.util.Optional;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import software.amazon.awssdk.awscore.AwsRequest;
@@ -19,17 +26,6 @@ import software.amazon.awssdk.services.kms.model.DecryptRequest;
 import software.amazon.awssdk.services.kms.model.EncryptRequest;
 import software.amazon.awssdk.services.kms.model.GenerateDataKeyRequest;
 
-import java.util.Arrays;
-import java.util.Optional;
-
-import static com.amazonaws.encryptionsdk.multi.MultipleProviderFactory.buildMultiProvider;
-import static java.util.Collections.singletonList;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.notNull;
-import static org.mockito.Mockito.*;
-
 public class KMSProviderBuilderMockTests {
   @Test
   public void testBareAliasMapping() {
@@ -39,10 +35,7 @@ public class KMSProviderBuilderMockTests {
     when(supplier.getClient(notNull())).thenReturn(client);
 
     String key1 = client.createKey().keyMetadata().keyId();
-    client.createAlias(CreateAliasRequest.builder()
-        .aliasName("foo")
-        .targetKeyId(key1)
-        .build());
+    client.createAlias(CreateAliasRequest.builder().aliasName("foo").targetKeyId(key1).build());
 
     KmsMasterKeyProvider mkp0 =
         KmsMasterKeyProvider.builder()
@@ -172,23 +165,25 @@ public class KMSProviderBuilderMockTests {
     ArgumentCaptor<GenerateDataKeyRequest> gdkr =
         ArgumentCaptor.forClass(GenerateDataKeyRequest.class);
     verify(client, times(1)).generateDataKey(gdkr.capture());
-    assertUserAgent(gdkr.getValue());
+    assertApiName(gdkr.getValue());
 
     ArgumentCaptor<EncryptRequest> encr = ArgumentCaptor.forClass(EncryptRequest.class);
     verify(client, times(1)).encrypt(encr.capture());
-    assertUserAgent(encr.getValue());
+    assertApiName(encr.getValue());
 
     ArgumentCaptor<DecryptRequest> decr = ArgumentCaptor.forClass(DecryptRequest.class);
     verify(client, times(1)).decrypt(decr.capture());
-    assertUserAgent(decr.getValue());
+    assertApiName(decr.getValue());
   }
 
-  private void assertUserAgent(AwsRequest request) {
+  private void assertApiName(AwsRequest request) {
     Optional<AwsRequestOverrideConfiguration> overrideConfig = request.overrideConfiguration();
     assertTrue(overrideConfig.isPresent());
-    assertTrue(overrideConfig.get()
-        .headers()
-        .get("User-Agent")
-        .contains(VersionInfo.apiName()));
+    assertTrue(
+        overrideConfig.get().apiNames().stream()
+            .anyMatch(
+                api ->
+                    api.name().equals(VersionInfo.apiName())
+                        && api.version().equals(VersionInfo.versionNumber())));
   }
 }

@@ -3,10 +3,21 @@
 
 package com.amazonaws.encryptionsdk.kmsv2;
 
+import static com.amazonaws.encryptionsdk.TestUtils.assertThrows;
+import static com.amazonaws.encryptionsdk.internal.RandomBytesGenerator.generate;
+import static org.junit.Assert.*;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.*;
+
 import com.amazonaws.encryptionsdk.*;
 import com.amazonaws.encryptionsdk.exception.CannotUnwrapDataKeyException;
 import com.amazonaws.encryptionsdk.internal.VersionInfo;
 import com.amazonaws.encryptionsdk.model.KeyBlob;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.function.Supplier;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import software.amazon.awssdk.awscore.AwsRequest;
@@ -14,18 +25,6 @@ import software.amazon.awssdk.awscore.AwsRequestOverrideConfiguration;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.kms.KmsClient;
 import software.amazon.awssdk.services.kms.model.*;
-
-import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.function.Supplier;
-
-import static com.amazonaws.encryptionsdk.TestUtils.assertThrows;
-import static com.amazonaws.encryptionsdk.internal.RandomBytesGenerator.generate;
-import static org.junit.Assert.*;
-import static org.mockito.ArgumentMatchers.isA;
-import static org.mockito.Mockito.*;
 
 public class KmsMasterKeyTest {
 
@@ -74,7 +73,7 @@ public class KmsMasterKeyTest {
     assertEquals(GRANT_TOKENS, actualRequest.grantTokens());
     assertEquals(ENCRYPTION_CONTEXT, actualRequest.encryptionContext());
     assertArrayEquals(DATA_KEY.getEncoded(), actualRequest.plaintext().asByteArray());
-    assertUserAgent(actualRequest);
+    assertApiName(actualRequest);
 
     assertEquals(encryptDataKeyResponse.getMasterKey(), kmsMasterKey);
     assertEquals(AWS_KMS_PROVIDER_ID, encryptDataKeyResponse.getProviderId());
@@ -98,7 +97,7 @@ public class KmsMasterKeyTest {
     assertArrayEquals(
         encryptDataKeyResponse.getEncryptedDataKey(),
         actualDecryptRequest.ciphertextBlob().asByteArray());
-    assertUserAgent(actualDecryptRequest);
+    assertApiName(actualDecryptRequest);
 
     assertEquals(DATA_KEY, decryptDataKeyResponse.getKey());
     assertArrayEquals(
@@ -130,7 +129,7 @@ public class KmsMasterKeyTest {
     assertEquals(GRANT_TOKENS, actualRequest.grantTokens());
     assertEquals(ENCRYPTION_CONTEXT, actualRequest.encryptionContext());
     assertEquals(ALGORITHM_SUITE.getDataKeyLength(), actualRequest.numberOfBytes().longValue());
-    assertUserAgent(actualRequest);
+    assertApiName(actualRequest);
 
     assertNotNull(generateDataKeyResponse.getKey());
     assertEquals(
@@ -140,7 +139,9 @@ public class KmsMasterKeyTest {
 
     DataKey<KmsMasterKey> decryptDataKeyResponse =
         kmsMasterKey.decryptDataKey(
-            ALGORITHM_SUITE, Collections.singletonList(generateDataKeyResponse), ENCRYPTION_CONTEXT);
+            ALGORITHM_SUITE,
+            Collections.singletonList(generateDataKeyResponse),
+            ENCRYPTION_CONTEXT);
 
     ArgumentCaptor<DecryptRequest> decrypt = ArgumentCaptor.forClass(DecryptRequest.class);
     verify(client, times(1)).decrypt(decrypt.capture());
@@ -154,7 +155,7 @@ public class KmsMasterKeyTest {
     assertArrayEquals(
         generateDataKeyResponse.getEncryptedDataKey(),
         actualDecryptRequest.ciphertextBlob().asByteArray());
-    assertUserAgent(actualDecryptRequest);
+    assertApiName(actualDecryptRequest);
 
     assertEquals(generateDataKeyResponse.getKey(), decryptDataKeyResponse.getKey());
     assertArrayEquals(
@@ -196,7 +197,7 @@ public class KmsMasterKeyTest {
     assertEquals(GRANT_TOKENS, actualRequest.grantTokens());
     assertEquals(ENCRYPTION_CONTEXT, actualRequest.encryptionContext());
     assertArrayEquals(DATA_KEY.getEncoded(), actualRequest.plaintext().asByteArray());
-    assertUserAgent(actualRequest);
+    assertApiName(actualRequest);
 
     assertEquals(AWS_KMS_PROVIDER_ID, encryptDataKeyResponse.getProviderId());
     assertArrayEquals(
@@ -241,10 +242,11 @@ public class KmsMasterKeyTest {
     String keyId = client.createKey().keyMetadata().arn();
     KmsMasterKey kmsMasterKey = KmsMasterKey.getInstance(supplier, keyId, mkp);
 
-    GenerateDataKeyResponse badResponse = GenerateDataKeyResponse.builder()
-        .keyId(keyId)
-        .plaintext(SdkBytes.fromByteArray(new byte[ALGORITHM_SUITE.getDataKeyLength() + 1]))
-        .build();
+    GenerateDataKeyResponse badResponse =
+        GenerateDataKeyResponse.builder()
+            .keyId(keyId)
+            .plaintext(SdkBytes.fromByteArray(new byte[ALGORITHM_SUITE.getDataKeyLength() + 1]))
+            .build();
 
     doReturn(badResponse).when(client).generateDataKey(isA(GenerateDataKeyRequest.class));
 
@@ -264,10 +266,11 @@ public class KmsMasterKeyTest {
     String keyId = client.createKey().keyMetadata().arn();
     KmsMasterKey kmsMasterKey = KmsMasterKey.getInstance(supplier, keyId, mkp);
 
-    DecryptResponse badResponse = DecryptResponse.builder()
-        .keyId(keyId)
-        .plaintext(SdkBytes.fromByteArray(new byte[ALGORITHM_SUITE.getDataKeyLength() + 1]))
-        .build();
+    DecryptResponse badResponse =
+        DecryptResponse.builder()
+            .keyId(keyId)
+            .plaintext(SdkBytes.fromByteArray(new byte[ALGORITHM_SUITE.getDataKeyLength() + 1]))
+            .build();
 
     doReturn(badResponse).when(client).decrypt(isA(DecryptRequest.class));
 
@@ -295,9 +298,10 @@ public class KmsMasterKeyTest {
     String keyId = client.createKey().keyMetadata().arn();
     KmsMasterKey kmsMasterKey = KmsMasterKey.getInstance(supplier, keyId, mkp);
 
-    DecryptResponse badResponse = DecryptResponse.builder()
-        .plaintext(SdkBytes.fromByteArray(new byte[ALGORITHM_SUITE.getDataKeyLength()]))
-        .build();
+    DecryptResponse badResponse =
+        DecryptResponse.builder()
+            .plaintext(SdkBytes.fromByteArray(new byte[ALGORITHM_SUITE.getDataKeyLength()]))
+            .build();
 
     doReturn(badResponse).when(client).decrypt(isA(DecryptRequest.class));
 
@@ -326,10 +330,11 @@ public class KmsMasterKeyTest {
     String keyId = client.createKey().keyMetadata().arn();
     KmsMasterKey kmsMasterKey = KmsMasterKey.getInstance(supplier, keyId, mkp);
 
-    DecryptResponse badResponse = DecryptResponse.builder()
-        .keyId("mismatchedID")
-        .plaintext(SdkBytes.fromByteArray(new byte[ALGORITHM_SUITE.getDataKeyLength()]))
-        .build();
+    DecryptResponse badResponse =
+        DecryptResponse.builder()
+            .keyId("mismatchedID")
+            .plaintext(SdkBytes.fromByteArray(new byte[ALGORITHM_SUITE.getDataKeyLength()]))
+            .build();
 
     doReturn(badResponse).when(client).decrypt(isA(DecryptRequest.class));
 
@@ -359,10 +364,11 @@ public class KmsMasterKeyTest {
 
     // Mock expected KMS response to verify success if second EDK is ok,
     // and the mismatched EDK is skipped vs failing outright
-    DecryptResponse kmsResponse = DecryptResponse.builder()
-        .keyId(keyId)
-        .plaintext(SdkBytes.fromByteArray(new byte[ALGORITHM_SUITE.getDataKeyLength()]))
-        .build();
+    DecryptResponse kmsResponse =
+        DecryptResponse.builder()
+            .keyId(keyId)
+            .plaintext(SdkBytes.fromByteArray(new byte[ALGORITHM_SUITE.getDataKeyLength()]))
+            .build();
     doReturn(kmsResponse).when(client).decrypt(isA(DecryptRequest.class));
 
     EncryptedDataKey edk =
@@ -389,12 +395,14 @@ public class KmsMasterKeyTest {
         actualDecryptRequest.keyId().getBytes(StandardCharsets.UTF_8));
   }
 
-  private void assertUserAgent(AwsRequest request) {
+  private void assertApiName(AwsRequest request) {
     Optional<AwsRequestOverrideConfiguration> overrideConfig = request.overrideConfiguration();
     assertTrue(overrideConfig.isPresent());
-    assertTrue(overrideConfig.get()
-        .headers()
-        .get("User-Agent")
-        .contains(VersionInfo.apiName()));
+    assertTrue(
+        overrideConfig.get().apiNames().stream()
+            .anyMatch(
+                api ->
+                    api.name().equals(VersionInfo.apiName())
+                        && api.version().equals(VersionInfo.versionNumber())));
   }
 }

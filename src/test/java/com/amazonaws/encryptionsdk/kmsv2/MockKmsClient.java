@@ -13,18 +13,15 @@
 
 package com.amazonaws.encryptionsdk.kmsv2;
 
-import software.amazon.awssdk.core.SdkBytes;
-import software.amazon.awssdk.regions.Region;
-import software.amazon.awssdk.regions.providers.AwsRegionProvider;
-import software.amazon.awssdk.regions.providers.DefaultAwsRegionProviderChain;
-import software.amazon.awssdk.services.kms.KmsClient;
-import software.amazon.awssdk.services.kms.model.*;
-
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.*;
-import java.lang.UnsupportedOperationException;
+import software.amazon.awssdk.core.SdkBytes;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.kms.KmsClient;
+import software.amazon.awssdk.services.kms.model.*;
+import software.amazon.awssdk.services.kms.model.UnsupportedOperationException;
 
 public class MockKmsClient implements KmsClient {
   private static final SecureRandom rnd = new SecureRandom();
@@ -64,15 +61,16 @@ public class MockKmsClient implements KmsClient {
     keyAliases.put(keyId, arn);
     keyAliases.put(arn, arn);
     return CreateKeyResponse.builder()
-        .keyMetadata(KeyMetadata.builder()
-            .awsAccountId(ACCOUNT_ID)
-            .creationDate(Instant.now())
-            .description(req.description())
-            .enabled(true)
-            .keyId(keyId)
-            .keyUsage(KeyUsageType.ENCRYPT_DECRYPT)
-            .arn(arn)
-            .build())
+        .keyMetadata(
+            KeyMetadata.builder()
+                .awsAccountId(ACCOUNT_ID)
+                .creationDate(Instant.now())
+                .description(req.description())
+                .enabled(true)
+                .keyId(keyId)
+                .keyUsage(KeyUsageType.ENCRYPT_DECRYPT)
+                .arn(arn)
+                .build())
         .build();
   }
 
@@ -86,9 +84,7 @@ public class MockKmsClient implements KmsClient {
           .plaintext(SdkBytes.fromByteArray(response.plaintext().asByteArray()))
           .build();
     } else {
-      throw InvalidCiphertextException.builder()
-          .message("Invalid Ciphertext")
-          .build();
+      throw InvalidCiphertextException.builder().message("Invalid Ciphertext").build();
     }
   }
 
@@ -97,10 +93,7 @@ public class MockKmsClient implements KmsClient {
     final String arn = retrieveArn(req.keyId());
 
     return DescribeKeyResponse.builder()
-        .keyMetadata(KeyMetadata.builder()
-            .arn(arn)
-            .keyId(arn)
-            .build())
+        .keyMetadata(KeyMetadata.builder().arn(arn).keyId(arn).build())
         .build();
   }
 
@@ -117,10 +110,11 @@ public class MockKmsClient implements KmsClient {
 
     final byte[] cipherText = new byte[512];
     rnd.nextBytes(cipherText);
-    DecryptResponse dec = DecryptResponse.builder()
-        .keyId(retrieveArn(arn))
-        .plaintext(SdkBytes.fromByteArray(req.plaintext().asByteArray()))
-        .build();
+    DecryptResponse dec =
+        DecryptResponse.builder()
+            .keyId(retrieveArn(arn))
+            .plaintext(SdkBytes.fromByteArray(req.plaintext().asByteArray()))
+            .build();
     ByteBuffer ctBuff = ByteBuffer.wrap(cipherText);
     responses_.put(new DecryptMapKey(ctBuff, req.encryptionContext()), dec);
 
@@ -145,17 +139,19 @@ public class MockKmsClient implements KmsClient {
           pt = new byte[16];
           break;
         default:
-          throw new UnsupportedOperationException();
+          throw UnsupportedOperationException.builder().build();
       }
     }
     rnd.nextBytes(pt);
 
     String arn = retrieveArn(req.keyId());
-    EncryptResponse encryptResponse = encrypt0(EncryptRequest.builder()
-            .keyId(arn)
-            .plaintext(SdkBytes.fromByteArray(pt))
-            .encryptionContext(req.encryptionContext())
-            .build());
+    EncryptResponse encryptResponse =
+        encrypt0(
+            EncryptRequest.builder()
+                .keyId(arn)
+                .plaintext(SdkBytes.fromByteArray(pt))
+                .encryptionContext(req.encryptionContext())
+                .build());
 
     return GenerateDataKeyResponse.builder()
         .keyId(arn)
@@ -163,17 +159,18 @@ public class MockKmsClient implements KmsClient {
         .plaintext(SdkBytes.fromByteArray(pt))
         .build();
   }
-  
+
   public GenerateDataKeyWithoutPlaintextResponse generateDataKeyWithoutPlaintext(
       GenerateDataKeyWithoutPlaintextRequest req) {
     String arn = retrieveArn(req.keyId());
-    GenerateDataKeyRequest generateDataKeyRequest = GenerateDataKeyRequest.builder()
-        .encryptionContext(req.encryptionContext())
-        .grantTokens(req.grantTokens())
-        .keyId(arn)
-        .keySpec(req.keySpec())
-        .numberOfBytes(req.numberOfBytes())
-        .build();
+    GenerateDataKeyRequest generateDataKeyRequest =
+        GenerateDataKeyRequest.builder()
+            .encryptionContext(req.encryptionContext())
+            .grantTokens(req.grantTokens())
+            .keyId(arn)
+            .keySpec(req.keySpec())
+            .numberOfBytes(req.numberOfBytes())
+            .build();
     GenerateDataKeyResponse generateDataKey = generateDataKey(generateDataKeyRequest);
 
     return GenerateDataKeyWithoutPlaintextResponse.builder()
@@ -181,7 +178,7 @@ public class MockKmsClient implements KmsClient {
         .keyId(arn)
         .build();
   }
-  
+
   public void setRegion(Region req) {
     region_ = req;
   }
@@ -228,7 +225,6 @@ public class MockKmsClient implements KmsClient {
       }
     }
 
-    
     public int hashCode() {
       final int prime = 31;
       int result = 1;
@@ -237,7 +233,6 @@ public class MockKmsClient implements KmsClient {
       return result;
     }
 
-    
     public boolean equals(Object obj) {
       if (this == obj) return true;
       if (obj == null) return false;
@@ -252,7 +247,6 @@ public class MockKmsClient implements KmsClient {
       return true;
     }
 
-    
     public String toString() {
       return "DecryptMapKey [cipherText=" + cipherText + ", ec=" + ec + "]";
     }

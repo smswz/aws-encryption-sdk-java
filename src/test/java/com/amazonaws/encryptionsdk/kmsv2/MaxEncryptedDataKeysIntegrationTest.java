@@ -3,21 +3,20 @@
 
 package com.amazonaws.encryptionsdk.kmsv2;
 
+import static org.junit.Assert.assertArrayEquals;
+import static org.mockito.Mockito.*;
+
 import com.amazonaws.encryptionsdk.AwsCrypto;
 import com.amazonaws.encryptionsdk.TestUtils;
 import com.amazonaws.encryptionsdk.exception.AwsCryptoException;
 import com.amazonaws.encryptionsdk.kms.KMSTestFixtures;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.kms.KmsClient;
 import software.amazon.awssdk.services.kms.model.DecryptRequest;
-
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.junit.Assert.assertArrayEquals;
-import static org.mockito.Mockito.*;
 
 public class MaxEncryptedDataKeysIntegrationTest {
   private static final byte[] PLAINTEXT = {1, 2, 3, 4};
@@ -29,7 +28,7 @@ public class MaxEncryptedDataKeysIntegrationTest {
 
   @Before
   public void setup() {
-    testClient_ = spy(KmsClient.builder().region(Region.US_WEST_2).build());
+    testClient_ = spy(new ProxyKmsClient(KmsClient.builder().region(Region.US_WEST_2).build()));
     testClientSupplier_ =
         region -> {
           if (region == Region.US_WEST_2) {
@@ -73,7 +72,8 @@ public class MaxEncryptedDataKeysIntegrationTest {
     TestUtils.assertThrows(
         AwsCryptoException.class,
         "Encrypted data keys exceed maxEncryptedDataKeys",
-        () -> testCryptoClient_.encryptData(provider, PLAINTEXT));
+        () ->
+            testCryptoClient_.encryptData(provider, PLAINTEXT));
   }
 
   @Test

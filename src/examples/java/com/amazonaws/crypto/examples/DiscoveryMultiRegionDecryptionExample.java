@@ -7,13 +7,14 @@ import com.amazonaws.encryptionsdk.AwsCrypto;
 import com.amazonaws.encryptionsdk.CommitmentPolicy;
 import com.amazonaws.encryptionsdk.CryptoResult;
 import com.amazonaws.encryptionsdk.kms.DiscoveryFilter;
-import com.amazonaws.encryptionsdk.kms.AwsKmsMrkAwareMasterKey;
-import com.amazonaws.encryptionsdk.kms.AwsKmsMrkAwareMasterKeyProvider;
+import com.amazonaws.encryptionsdk.kmssdkv2.AwsKmsMrkAwareMasterKey;
+import com.amazonaws.encryptionsdk.kmssdkv2.AwsKmsMrkAwareMasterKeyProvider;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
+import software.amazon.awssdk.regions.Region;
 
 /**
  * <p>
@@ -113,7 +114,7 @@ public class DiscoveryMultiRegionDecryptionExample {
         // it is limited to the Region configured for the AWS SDK.
         final AwsKmsMrkAwareMasterKeyProvider decryptingKeyProvider = AwsKmsMrkAwareMasterKeyProvider
                 .builder()
-                .withDiscoveryMrkRegion(discoveryMrkRegion)
+                .discoveryMrkRegion(Region.of(discoveryMrkRegion))
                 .buildDiscovery(discoveryFilter);
 
         // 7. Decrypt the data

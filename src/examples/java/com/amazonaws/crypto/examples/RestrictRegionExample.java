@@ -11,12 +11,14 @@ import java.util.Map;
 import com.amazonaws.encryptionsdk.AwsCrypto;
 import com.amazonaws.encryptionsdk.CryptoResult;
 import com.amazonaws.encryptionsdk.exception.AwsCryptoException;
-import com.amazonaws.encryptionsdk.kms.KmsMasterKey;
-import com.amazonaws.encryptionsdk.kms.KmsMasterKeyProvider;
+import com.amazonaws.encryptionsdk.kmssdkv2.KmsMasterKey;
+import com.amazonaws.encryptionsdk.kmssdkv2.KmsMasterKeyProvider;
 import com.amazonaws.encryptionsdk.CommitmentPolicy;
 import com.amazonaws.encryptionsdk.kms.DiscoveryFilter;
 import com.amazonaws.services.kms.AWSKMSClientBuilder;
 import com.amazonaws.services.kms.AWSKMS;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.kms.KmsClient;
 
 /**
  * <p>
@@ -60,7 +62,7 @@ public class RestrictRegionExample {
                 .build();
 
         // 2. Instantiate the AWS KMS client for the desired region
-        final AWSKMS kmsClient = AWSKMSClientBuilder.standard().withRegion(region).build();
+        final KmsClient kmsClient = KmsClient.builder().region(Region.of(region)).build();
 
         // 3. Instantiate an AWS KMS master key provider for encryption.
         //
@@ -101,8 +103,8 @@ public class RestrictRegionExample {
         // This example also configures the AWS KMS master key provider with a Discovery Filter to limit
         // the attempted AWS KMS CMKs to a particular partition and account.
         final KmsMasterKeyProvider decryptingKeyProvider = KmsMasterKeyProvider.builder()
-                .withCustomClientFactory(cmkRegion -> {
-                    if(cmkRegion.equals(region)) {
+                .customRegionalClientSupplier(cmkRegion -> {
+                    if(cmkRegion.equals(Region.of(region))) {
                         // return the previously built AWS KMS client so that we do
                         // not create a new client on every decrypt call.
                         return kmsClient;

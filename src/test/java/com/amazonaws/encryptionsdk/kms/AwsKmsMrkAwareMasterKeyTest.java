@@ -28,7 +28,6 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.Test;
 import org.junit.experimental.runners.Enclosed;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 
@@ -102,7 +101,6 @@ public class AwsKmsMrkAwareMasterKeyTest {
     }
 
     @Test
-    @DisplayName("Precondition: A provider is required.")
     public void requires_valid_provider() {
       AWSKMS client = spy(new MockKMSClient());
 
@@ -230,8 +228,6 @@ public class AwsKmsMrkAwareMasterKeyTest {
     }
 
     @Test
-    @DisplayName(
-        "Exceptional Postcondition: Must have an AWS KMS ARN from AWS KMS generateDataKey.")
     public void need_an_arn() {
       final CryptoAlgorithm ALGORITHM_SUITE =
           CryptoAlgorithm.ALG_AES_256_GCM_IV12_TAG16_HKDF_SHA256;
@@ -342,7 +338,6 @@ public class AwsKmsMrkAwareMasterKeyTest {
     }
 
     @Test
-    @DisplayName("Precondition: The key format MUST be RAW.")
     public void secret_key_must_be_raw() {
       final CryptoAlgorithm ALGORITHM_SUITE =
           CryptoAlgorithm.ALG_AES_256_GCM_IV12_TAG16_HKDF_SHA256;
@@ -382,7 +377,6 @@ public class AwsKmsMrkAwareMasterKeyTest {
     }
 
     @Test
-    @DisplayName("Postcondition: Must have an AWS KMS ARN from AWS KMS encrypt.")
     public void need_an_arn() {
       final CryptoAlgorithm ALGORITHM_SUITE =
           CryptoAlgorithm.ALG_AES_256_GCM_IV12_TAG16_HKDF_SHA256;
@@ -573,7 +567,6 @@ public class AwsKmsMrkAwareMasterKeyTest {
     }
 
     @Test
-    @DisplayName("Exceptional Postcondition: Must have a CMK ARN from AWS KMS to match.")
     public void expect_key_arn() {
       final CryptoAlgorithm ALGORITHM_SUITE =
           CryptoAlgorithm.ALG_AES_256_GCM_IV12_TAG16_HKDF_SHA256;
@@ -821,7 +814,6 @@ public class AwsKmsMrkAwareMasterKeyTest {
     }
 
     @Test
-    @DisplayName("Exceptional Postcondition: Master key was unable to decrypt.")
     // = compliance/framework/aws-kms/aws-kms-mrk-aware-master-key.txt#2.9
     // = type=test
     // # If this attempt

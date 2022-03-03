@@ -40,7 +40,7 @@ public class DiscoveryMultiRegionDecryptionExample {
         final String keyName = args[0];
         final String partition = args[1];
         final String accountId = args[2];
-        final String discoveryMrkRegion = args[3];
+        final Region discoveryMrkRegion = Region.of(args[3]);
 
         encryptAndDecrypt(keyName, partition, accountId, discoveryMrkRegion);
     }
@@ -49,7 +49,7 @@ public class DiscoveryMultiRegionDecryptionExample {
         final String keyName,
         final String partition,
         final String accountId,
-        final String discoveryMrkRegion
+        final Region discoveryMrkRegion
     ) {
         // 1. Instantiate the SDK
         // This builds the AwsCrypto client with
@@ -114,7 +114,7 @@ public class DiscoveryMultiRegionDecryptionExample {
         // it is limited to the Region configured for the AWS SDK.
         final AwsKmsMrkAwareMasterKeyProvider decryptingKeyProvider = AwsKmsMrkAwareMasterKeyProvider
                 .builder()
-                .discoveryMrkRegion(Region.of(discoveryMrkRegion))
+                .discoveryMrkRegion(discoveryMrkRegion)
                 .buildDiscovery(discoveryFilter);
 
         // 7. Decrypt the data

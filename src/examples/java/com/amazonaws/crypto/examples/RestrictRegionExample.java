@@ -15,8 +15,6 @@ import com.amazonaws.encryptionsdk.kmssdkv2.KmsMasterKey;
 import com.amazonaws.encryptionsdk.kmssdkv2.KmsMasterKeyProvider;
 import com.amazonaws.encryptionsdk.CommitmentPolicy;
 import com.amazonaws.encryptionsdk.kms.DiscoveryFilter;
-import com.amazonaws.services.kms.AWSKMSClientBuilder;
-import com.amazonaws.services.kms.AWSKMS;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.kms.KmsClient;
 
@@ -104,13 +102,13 @@ public class RestrictRegionExample {
         // the attempted AWS KMS CMKs to a particular partition and account.
         final KmsMasterKeyProvider decryptingKeyProvider = KmsMasterKeyProvider.builder()
                 .customRegionalClientSupplier(cmkRegion -> {
-                    if(cmkRegion.equals(Region.of(region))) {
+                    if(cmkRegion.equals(region)) {
                         // return the previously built AWS KMS client so that we do
                         // not create a new client on every decrypt call.
                         return kmsClient;
                     }
 
-                    throw new AwsCryptoException("Only " + region + " is supported");
+                    throw new AwsCryptoException("Only " + region.id() + " is supported");
                 })
                 .buildDiscovery(discoveryFilter);
 

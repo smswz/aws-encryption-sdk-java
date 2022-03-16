@@ -234,6 +234,10 @@ public class AwsCrypto {
     return encryptionAlgorithm_;
   }
 
+  public CommitmentPolicy getCommitmentPolicy() { return commitmentPolicy_; }
+
+  public int getMaxEncryptedDataKeys() { return maxEncryptedDataKeys_; }
+
   /**
    * Sets the framing size to use when <em>encrypting</em> data. This has no impact on decryption.
    * If {@code frameSize} is 0, then framing is disabled and the entire plaintext will be encrypted
